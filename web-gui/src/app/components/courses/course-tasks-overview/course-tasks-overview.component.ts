@@ -143,13 +143,16 @@ export class CourseTasksOverviewComponent implements OnInit {
   }
 
   goOnline() {
+    this.db.subscribeCourse(this.courseID).subscribe();
     Notification.requestPermission();
-    const subscription: Subscription = this.classroomService.getInvitations().subscribe(n => {
+    this.classroomService.getInvitations().subscribe(n => {
       this.dialog.open(IncomingCallDialogComponent, {
         height: 'auto',
         width: 'auto',
         data: {courseID: this.courseID, invitation: n},
         disableClose: true
+      }).afterClosed().subscribe(hasAccepted => {
+
       });
     });
     this.classroomService.join(this.courseID).subscribe();

@@ -1,8 +1,5 @@
-
 package de.thm.ii.fbs.model
-
 import java.security.Principal
-
 import scala.collection.mutable
 
 /**
@@ -54,6 +51,50 @@ object UserConferenceMap {
   }
 
   /**
+    * Lets a user attend a conference of another user
+    * @param invitation invitation of the conference the user want to attend
+    * @param principal user that wants to attend
+    */
+  def attend(invitation: Invitation, principal: Principal): Unit = {
+    this.conferenceToUser.get(invitation) match {
+      case Some(p) => userToConference.get(p) match {
+        case Some(v) => v.attendees += principal.getName;
+        case None =>
+      }
+      case None =>
+    }
+    onAttendListeners.foreach(_(invitation, principal))
+  }
+
+  /**
+    * Lets a user depart from a conference of another user
+    * Removes both, the user and its invitation by using its invitation
+    * @param invitation invitation of the conference the user want to depart from
+    * @param principal user that wants to depart
+    */
+  def depart(invitation: Invitation, principal: Principal): Unit = {
+     userToConference.get(invitation.creator) match {
+        case Some(v) => {
+          v.attendees -= principal.getName
+          onDepartListeners.foreach(_(invitation, principal))
+        }
+        case None =>
+    }
+  }
+
+  /**
+    * Lets a user depart from a conference if he attends any
+    * @param principal user that departs from conferences
+    */
+  def departAll(principal: Principal): Unit = {
+    conferenceToUser.keys.foreach((invitation) => {
+      if (invitation.attendees.contains(principal.getName)) {
+        this.depart(invitation, principal);
+      }
+    })
+  }
+
+  /**
     * Removes both, the user and its session by using its principal
     *
     * @param p The principal
@@ -67,12 +108,28 @@ object UserConferenceMap {
 
   private val onMapListeners = mutable.Set[(Invitation, Principal) => Unit]()
   private val onDeleteListeners = mutable.Set[(Invitation, Principal) => Unit]()
+  private val onAttendListeners = mutable.Set[(Invitation, Principal) => Unit]()
+  private val onDepartListeners = mutable.Set[(Invitation, Principal) => Unit]()
 
   /**
     * @param cb Callback that gets executed on every map event
     */
   def onMap(cb: (Invitation, Principal) => Unit): Unit = {
     onMapListeners.add(cb)
+  }
+
+  /**
+    * @param cb Callback that gets executed on every attend event
+    */
+  def onAttend(cb: (Invitation, Principal) => Unit): Unit = {
+    onAttendListeners.add(cb)
+  }
+
+  /**
+    * @param cb Callback that gets executed on every depart event
+    */
+  def onDepart(cb: (Invitation, Principal) => Unit): Unit = {
+    onDepartListeners.add(cb)
   }
 
   /**
@@ -100,32 +157,33 @@ object UserConferenceMap {
 
   /**
     * An Conference System Invitation
+    * @param creator creator of the invitation
+    * @param visibility set of users who attend the conference
+    * @param attendees set of users who attend the conference
+    * @param service set of users who attend the conference
+    * @param courseId set of users who attend the conference
     */
-    abstract class Invitation {
-    /**
-    *  @return creator the Creator who published the Invitation
-    */
-      def creator: User
-    /**
-      *  @return courseId the scope of the Invitation
-      */
-      def courseId: Int
-    /**
-      *  @return courseId the scope of the Invitation
-      */
-    def service: String
-  }
+     abstract class Invitation(val creator: User, val courseId: Int, val visibility: String,
+                               val attendees: scala.collection.mutable.Set[String], val service: String)
   /**
     * An Conference System Invitation
     *
-    * @param meetingId       meetingId for users to generate their own invitation link
+    * @param meetingId meetingId for users to generate their own invitation link
     * @param meetingPasswort meetingPassword for users to generate their own invitation link
     * @param creator Issuer for the Invitation
     * @param courseId courseId for the Invitation
-    * @param service courseId for the Invitation
+    * @param service  courseId for the Invitation
+    * @param visibility courseId for the Invitation
+    * @param attendees courseId for the Invitation
     */
-  case class BBBInvitation(override val creator: User, override val courseId: Int, override val service: String,
-                           meetingId: String, meetingPasswort: String) extends Invitation
+  case class BBBInvitation(override val creator: User, override val courseId: Int, override val visibility: String,
+                      override val attendees: scala.collection.mutable.Set[String], override val service: String,
+                      meetingId: String, meetingPasswort: String) extends Invitation(creator: User,
+    courseId: Int,
+    visibility: String,
+    attendees: scala.collection.mutable.Set[String],
+    service: String
+    )
 
   /**
     * An Conference System Invitation
@@ -134,7 +192,14 @@ object UserConferenceMap {
     * @param creator Issuer for the Invitation
     * @param courseId courseId for the Invitation
     * @param service courseId for the Invitation
-    */
-  case class JitsiInvitation(override val creator: User, override val courseId: Int,
-                             override val service: String, href: String) extends Invitation
+    * @param visibility courseId for the Invitation
+    * @param attendees courseId for the Invitation
+    * */
+  case class JitsiInvitation(override val creator: User, override val courseId: Int, override val visibility: String,
+                             override val attendees: scala.collection.mutable.Set[String], override val service: String,
+                        href: String) extends Invitation(creator: User,
+    courseId: Int,
+    visibility: String,
+    attendees: scala.collection.mutable.Set[String],
+    service: String)
 }

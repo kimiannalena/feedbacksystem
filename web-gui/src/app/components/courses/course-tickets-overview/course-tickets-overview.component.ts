@@ -8,11 +8,11 @@ import {UserService} from '../../../service/user.service';
 import {MatSnackBar} from '@angular/material/snack-bar';
 import {DomSanitizer} from '@angular/platform-browser';
 import {DOCUMENT} from '@angular/common';
-import {Ticket, User} from '../../../interfaces/HttpInterfaces';
+import {GeneralCourseInformation, Ticket, User} from '../../../interfaces/HttpInterfaces';
 import { Pipe, PipeTransform } from '@angular/core';
 import {AssignTicketDialogComponent} from '../detail-ticket/assign-ticket-dialog/assign-ticket-dialog.component';
 import {InvitetoConferenceDialogComponent} from '../detail-ticket/inviteto-conference-dialog/inviteto-conference-dialog.component';
-import {Observable, Subscription} from 'rxjs';
+import {Observable, Subscription, timer, interval, BehaviorSubject} from 'rxjs';
 import {ClassroomService} from '../../../service/classroom.service';
 import {UserRoles} from '../../../util/UserRoles';
 import {NewticketDialogComponent} from '../detail-course/newticket-dialog/newticket-dialog.component';
@@ -36,12 +36,22 @@ export class CourseTicketsOverviewComponent implements OnInit {
   onlineUsers: Observable<User[]>;
   tickets: Observable<Ticket[]>;
   self: User;
+  isCourseSubscriber: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
   ngOnInit(): void {
+    this.db.subscribeCourse(this.courseID);
     this.onlineUsers = this.classroomService.getUsers();
     this.tickets = this.classroomService.getTickets();
     this.route.params.subscribe(
       param => {
         this.courseID = param.id;
+        this.db.getSubscribedCourses().subscribe(n => {
+          const thisCourse: GeneralCourseInformation | undefined = n.find((course) => {
+            course.course_id = this.courseID;
+          });
+          if (thisCourse) {
+            this.isCourseSubscriber.next(true);
+          }
+        });
       });
     this.onlineUsers.subscribe(n => {
       this.self = n.find(u => {
@@ -159,34 +169,54 @@ export class CourseTicketsOverviewComponent implements OnInit {
       const conferenceWindowHandle: Window = this.conferenceService.openWindowIfClosed(m);
       if (conferenceWindowHandle) {
         this.conferenceService.stopTimeout();
-        const closetimer = setInterval(() => {
-          if (conferenceWindowHandle.closed || !conferenceWindowHandle) {
+        const sub: Subscription = interval(5000).subscribe(_ => {
+          if (!conferenceWindowHandle || conferenceWindowHandle.closed) {
             this.conferenceService.startTimeout();
             this.closeConference();
-            clearInterval(closetimer);
+            sub.unsubscribe();
           }
-        }, 1000);
-        this.classroomService.openConference(this.courseID);
+        });
+        this.classroomService.openConference(this.courseID, 'public');
       }
     });
   }
+
+  shareConference() {
+    this.classroomService.isInConference(this.self);
+  }
+
   closeConference() {
     this.classroomService.closeConference(this.courseID);
   }
 
   joinConference(user: User) {
     const invitation = this.classroomService.getInvitationFromUser(user);
+    let windowHandle: Window;
     if (invitation.service == 'bigbluebutton') {
-      // @ts-ignore
       // tslint:disable-next-line:max-line-length
-      this.conferenceService.getBBBConferenceInvitationLink(invitation.meetingId, invitation.meetingPassword).pipe(first()).subscribe(n => this.openUrlInNewWindow(n.href));
+      this.conferenceService.getBBBConferenceInvitationLink(invitation.meetingId, invitation.meetingPassword)
+        .pipe(first())
+        .subscribe(n => {
+          // @ts-ignore
+          windowHandle = this.openUrlInNewWindow(n.href);
+          this.classroomService.attendConference(invitation);
+        });
     } else if (invitation.service == 'jitsi') {
-      this.openUrlInNewWindow(invitation.href);
+      windowHandle = this.openUrlInNewWindow(invitation.href);
+      this.classroomService.attendConference(invitation);
     }
+    const sub = interval(5000).subscribe(_ => {
+      if (!windowHandle || windowHandle.closed) {
+        this.classroomService.departConference(invitation);
+        sub.unsubscribe();
+      }
+    });
   }
 
-  public openUrlInNewWindow(url: string) {
-    window.open(url, '_blank');
+
+
+  public openUrlInNewWindow(url: string): Window {
+    return window.open(url, '_blank');
   }
 }
 

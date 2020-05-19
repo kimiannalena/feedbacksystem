@@ -3,12 +3,11 @@ import {ConferenceInvitation, Ticket, User} from '../../../../interfaces/HttpInt
 import {MAT_DIALOG_DATA, MatDialog, MatDialogRef} from '@angular/material/dialog';
 import {UpdateCourseDialogComponent} from '../../detail-course/update-course-dialog/update-course-dialog.component';
 import {MatSnackBar} from '@angular/material/snack-bar';
-import {Observable, Subject, BehaviorSubject} from 'rxjs';
+import {interval, Observable} from 'rxjs';
 import { first } from 'rxjs/operators';
 import {UserService} from '../../../../service/user.service';
 import {ClassroomService} from '../../../../service/classroom.service';
 import {ConferenceService} from '../../../../service/conference.service';
-import {InvitetoConferenceDialogComponent} from '../inviteto-conference-dialog/inviteto-conference-dialog.component';
 import {CloseTicketDialogComponent} from '../close-ticket-dialog/close-ticket-dialog.component';
 
 @Component({
@@ -93,6 +92,33 @@ export class AssignTicketDialogComponent implements OnInit {
 
   public isAuthorized() {
     return this.user.isTutorInCourse(this.courseID) || this.user.isDocentInCourse(this.courseID);
+  }
+
+  joinConference(user: User) {
+    const invitation = this.classroomService.getInvitationFromUser(user);
+    let windowHandle: Window;
+    if (invitation.service == 'bigbluebutton') {
+      // tslint:disable-next-line:max-line-length
+      this.conferenceService.getBBBConferenceInvitationLink(invitation.meetingId, invitation.meetingPassword)
+        .pipe(first())
+        .subscribe(n => {
+          // @ts-ignore
+          windowHandle = this.openUrlInNewWindow(n.href);
+          this.classroomService.attendConference(invitation);
+        });
+    } else if (invitation.service == 'jitsi') {
+      windowHandle = this.openUrlInNewWindow(invitation.href);
+      this.classroomService.attendConference(invitation);
+    }
+    const sub = interval(5000).subscribe(_ => {
+      if (!windowHandle || windowHandle.closed) {
+        this.classroomService.departConference(invitation);
+        sub.unsubscribe();
+      }
+    });
+  }
+  public openUrlInNewWindow(url: string): Window {
+    return window.open(url, '_blank');
   }
 }
 

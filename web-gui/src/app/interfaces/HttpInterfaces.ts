@@ -240,13 +240,8 @@ export interface Ticket {
   priority: number;
   status: string;
   timestamp: number;
-  assignee: null;
-  creator: {
-    username: string;
-    prename: string;
-    surname: string
-    role: number;
-  };
+  assignee: User;
+  creator: User;
 }
 
 export interface ConfInvite {
@@ -347,6 +342,8 @@ export interface GlobalSetting {
 
 export interface ConferenceInvitation {
   service: string;
+  visibility: string;
+  attendees: string[];
   href?: string;
   meetingId?: string;
   meetingPassword?: string;
