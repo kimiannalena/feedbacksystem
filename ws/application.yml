@@ -1,6 +1,6 @@
 cas:
   authentication-url-patterns: /api/v1/login
-  client-host-url: https://feedback.mni.thm.de
+  client-host-url: https://localhost:8080
   server-login-url: https://cas.thm.de/cas/login
   server-url-prefix: https://cas.thm.de/cas/
   validation-type: CAS3
