@@ -54,7 +54,7 @@ export class DatabaseService {
    * @param type The type of text
    */
   getPrivacyOrImpressumText(type: TextType): Observable<{ markdown: string }> {
-    return this.http.get<{ markdown: string }>('/api/v1/settings/markdown/' + type.toString());
+    return this.http.get<{ markdown: string }>('/api/v1/legal/' + type.toString());
   }
 
   createNewSetting(key: string, value: string, typ: string) {
@@ -452,14 +452,12 @@ export class DatabaseService {
   }
 
   /**
-   * Returns a sql compatible timestamp string based on a given date
-   * @param date
+   * Transforms date to milliseconds since Unix epoch.
+   * @param date to transform.
+   * @return milliseconds since Unix epoch.
    */
-  private formatDate(date: Date): string {
-    const curr_date = date.getDate();
-    const curr_month = date.getMonth() + 1; // Months are zero based
-    const curr_year = date.getFullYear();
-    return curr_year + '-' + curr_month + '-' + curr_date + ' ' + date.getHours() + ':' + date.getMinutes() + ':' + date.getSeconds();
+  private formatDate(date: Date): number {
+    return date.getTime()
   }
 
   /**

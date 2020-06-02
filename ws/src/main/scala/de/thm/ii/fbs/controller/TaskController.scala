@@ -4,8 +4,6 @@ import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import java.nio.file.Paths
 
-import org.joda.time.format.DateTimeFormat
-
 import scala.jdk.CollectionConverters._
 import java.util.{Date, NoSuchElementException, Timer, TimerTask}
 
@@ -16,7 +14,6 @@ import de.thm.ii.fbs.util.{BadRequestException, JsonParser, ResourceNotFoundExce
 import javax.servlet.http.HttpServletRequest
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.serialization.StringDeserializer
-import org.joda.time.DateTime
 import org.slf4j.{Logger, LoggerFactory}
 import org.springframework.beans.factory.SmartInitializingSingleton
 import org.springframework.beans.factory.annotation.{Autowired, Value}
@@ -28,6 +25,7 @@ import org.springframework.kafka.core.{DefaultKafkaConsumerFactory, KafkaTemplat
 import org.springframework.kafka.listener.{ContainerProperties, KafkaMessageListenerContainer, MessageListener}
 import org.springframework.web.bind.annotation._
 import org.springframework.web.multipart.MultipartFile
+import de.thm.ii.fbs.util.JsonWrapper._
 
 /**
   * TaskController implement routes for submitting task and receiving results
@@ -65,7 +63,7 @@ class TaskController {
   private var plagiatScriptAnswerContainer: KafkaMessageListenerContainer[String, String] = _
   private def consumerConfigScala: Map[String, Object] = Map("bootstrap.servers" -> kafkaURL, "group.id" -> "jcg-group")
 
-  @Value("${cas.client-host-url}")
+  @Value("${server.host}")
   private val CLIENT_HOST_URL: String = null
 
   @Value("${compile.production}")
@@ -193,10 +191,8 @@ class TaskController {
         LABEL_SUBMIT_TYP -> LABEL_FILE, LABEL_JWT_TOKEN -> testsystemService.generateTokenFromTestsystem(tasksystem_id)
       )
       val jsonResult = JsonParser.mapToJsonStr(kafkaMap)
-      logger.info(jsonResult)
       val topic = taskService.connectKafkaTopic(tasksystem_id, "script_request")
       kafkaTemplate.send(topic, jsonResult)
-      logger.info(topic)
       kafkaTemplate.flush()
       message = true
 
@@ -245,12 +241,11 @@ class TaskController {
     var upload_url: String = null
 
     if (taskDetails(TaskDBLabels.deadline) != null) {
-      val taskDeadline = taskDetails(TaskDBLabels.deadline).toString
-      val formatter = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss.S")
-      val dt: DateTime = formatter.parseDateTime(taskDeadline)
+      val taskDeadline = taskDetails(TaskDBLabels.deadline).asInstanceOf[Long]
+      val dt = new Date(taskDeadline)
       val currTimestamp = new Date().getTime
       // Calculate overdue time
-      val diff = (dt.getMillis) - currTimestamp
+      val diff = dt.getTime - currTimestamp
       if (diff < 0) {
         throw new BadRequestException("Deadline for task " + taskid.toString + " is overdue since " + (diff/1000*(-1)).toString + " seconds.")
       }
@@ -277,8 +272,7 @@ class TaskController {
               user, LABEL_DATA, data)
           })
         }
-      }
-      else {
+      } else {
         submissionId = submissionService.submitTaskWithFile(taskid, user)
         upload_url = CLIENT_HOST_URL + "/api/v1/" + "tasks/" + taskid.toString + "/submissions/" + submissionId.toString + "/file/upload"
       }
@@ -333,6 +327,7 @@ class TaskController {
                        request: HttpServletRequest): Map[String, Any] = {
     val user = Users.claimAuthorization(request)
     if (!taskService.isPermittedForTask(taskid, user)) {
+      logger.warn(s"User ${user.username} tried to create a task without having permissions.")
       throw new UnauthorizedException
     }
 
@@ -373,7 +368,7 @@ class TaskController {
     try {
       val name = jsonNode.get(LABEL_NAME).asText()
       val description = jsonNode.get(LABEL_DESCRIPTION).asText()
-      val deadline = if (jsonNode.get(TaskDBLabels.deadline) != null) jsonNode.get(TaskDBLabels.deadline).asText() else null
+      val deadline = jsonNode.retrive(TaskDBLabels.deadline).asLong().map(new Date(_)).orNull
       val load_external_description = jsonNode.get(TaskDBLabels.load_external_description).asBoolean()
 
       // Test if testsystem exists
@@ -438,7 +433,7 @@ class TaskController {
 
     val name = if (jsonNode.get(LABEL_NAME) != null) jsonNode.get(LABEL_NAME).asText() else null
     val description = if (jsonNode.get(LABEL_DESCRIPTION) != null) jsonNode.get(LABEL_DESCRIPTION).asText() else null
-    val deadline = if (jsonNode.get(TaskDBLabels.deadline) != null) jsonNode.get(TaskDBLabels.deadline).asText() else null
+    val deadline = jsonNode.retrive(TaskDBLabels.deadline).asLong().map(new Date(_)).orNull
     val load_external_description = if (jsonNode.get(TaskDBLabels.load_external_description) != null) {
       jsonNode.get(TaskDBLabels.load_external_description).asBoolean()
     } else {
@@ -598,7 +593,6 @@ class TaskController {
     // TODO fire this method after updates on Testsystem!
     val kafkaTopicCheckAnswer: List[String] = testsystemService.getTestsystemsTopicLabelsByTopic("check_answer")
 
-    kafkaTopicCheckAnswer.foreach(s => logger.warn(s))
     val containerProperties: ContainerProperties = new ContainerProperties(kafkaTopicCheckAnswer: _*)
     if (container != null) container.stop()
     container = new KafkaMessageListenerContainer(kafkaConsumerFactory, containerProperties)
@@ -615,7 +609,6 @@ class TaskController {
         try {
           val testsystem = data.topic.replace("_check_answer", "")
           val submissionID = Integer.parseInt(answeredMap(LABEL_SUBMISSION_ID).asInstanceOf[String])
-          logger.warn(answeredMap.toString())
           if (answeredMap.contains("isinfo") && answeredMap("isinfo").asInstanceOf[Boolean]){
             taskService.setExternalAnswerOfTaskByTestsytem(Integer.parseInt(answeredMap(LABEL_TASK_ID).asInstanceOf[String]),
               answeredMap(LABEL_DATA).asInstanceOf[String], answeredMap("username").toString, testsystem)
@@ -634,7 +627,8 @@ class TaskController {
             }
           }
         } catch {
-          case _: NoSuchElementException => logger.warn(LABEL_CHECKER_SERVICE_NOT_ALL_PARAMETER)
+          case e: NoSuchElementException => logger.warn(LABEL_CHECKER_SERVICE_NOT_ALL_PARAMETER
+            + "Error: " + e.getStackTrace.toString + "Data: " + data.toString)
         }
       }
     })
@@ -649,8 +643,6 @@ class TaskController {
 
     // TODO fire this method after updates on Testsystem!
     val kafkaTopicNewTaskAnswer: List[String] = testsystemService.getTestsystemsTopicLabelsByTopic(LABEL_NEW_TASK_ASNWER)
-
-    kafkaTopicNewTaskAnswer.foreach(s => logger.warn(s))
     val containerProperties: ContainerProperties = new ContainerProperties(kafkaTopicNewTaskAnswer: _*)
     if (newTaskAnswerContainer != null) {
       newTaskAnswerContainer.stop()
@@ -669,7 +661,6 @@ class TaskController {
 
         val answeredMap = JsonParser.jsonStrToMap(data.value())
         try {
-          logger.warn(answeredMap.toString())
           val taskId = Integer.parseInt(answeredMap(LABEL_TASK_ID).asInstanceOf[String])
           val accept = answeredMap("accept").asInstanceOf[Boolean]
           val error = answeredMap("error").asInstanceOf[String]
@@ -717,8 +708,6 @@ class TaskController {
       new DefaultKafkaConsumerFactory[String, String](consumerConfigJava, new StringDeserializer, new StringDeserializer)
 
     val kafkaTopicNewTaskAnswer: List[String] = List("plagiarismchecker_script_answer")
-
-    kafkaTopicNewTaskAnswer.foreach(s => logger.warn(s))
     val containerProperties: ContainerProperties = new ContainerProperties(kafkaTopicNewTaskAnswer: _*)
     if (plagiatScriptAnswerContainer != null) {
       plagiatScriptAnswerContainer.stop()
@@ -735,7 +724,6 @@ class TaskController {
         kafkaReceivedDebug(data)
         val answeredMap = JsonParser.jsonStrToMap(data.value())
         try {
-          logger.warn(answeredMap.toString())
           val workedOut = answeredMap(LABEL_SUCCESS).asInstanceOf[Boolean]
           val courseid = answeredMap(LABEL_COURSE_ID).asInstanceOf[BigInt]
 
