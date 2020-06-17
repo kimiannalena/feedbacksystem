@@ -42,7 +42,7 @@ import {DataprivacyDialogComponent} from './components/dataprivacy-dialog/datapr
 import {ImpressumDialogComponent} from './components/impressum-dialog/impressum-dialog.component';
 import {CookieService} from 'ngx-cookie-service';
 import {MatDatepickerModule} from '@angular/material/datepicker';
-import {MatNativeDateModule} from '@angular/material/core';
+import {MAT_DATE_LOCALE, MatNativeDateModule} from '@angular/material/core';
 import {MarkdownModule} from 'ngx-markdown';
 import {OwlDateTimeModule, OwlNativeDateTimeModule} from 'ng-pick-datetime';
 import { DeleteCourseModalComponent } from './components/courses/modals/delete-course-modal/delete-course-modal.component';
@@ -99,8 +99,8 @@ import {MatSliderModule} from '@angular/material/slider';
 export class ApiURIHttpInterceptor implements HttpInterceptor {
   public intercept(req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
     const clonedRequest: HttpRequest<any> = req.clone({
-      url: (req.url.search('localhost') >= 0) ? req.url : 'https://localhost:8080'  + req.url // 'https://fk-server.mni.thm.de'
-      // url: 'https://feedback.mni.thm.de/'  + req.url // 'https://fk-server.mni.thm.de'
+      //url: (req.url.search('localhost') >= 0) ? req.url : 'https://localhost:8080'  + req.url // 'https://fk-server.mni.thm.de'
+      url: 'https://feedback.mni.thm.de/'  + req.url // 'https://fk-server.mni.thm.de'
     });
 
     return next.handle(clonedRequest);
@@ -210,7 +210,7 @@ export const httpInterceptorProviders = [
     DeleteTaskModalComponent, AnswerFromTestsystemDialogComponent, DeleteSettingDialogComponent,
     CourseParameterModalComponent, CourseParameterUserModalComponent, UploadPlagiatScriptComponent,
     EditTestsystemsModalComponent, DeleteTestsystemAskModalComponent],
-  providers: [CookieService],
+  providers: [CookieService, httpInterceptorProviders],
   bootstrap: [AppComponent]
 })
 export class AppModule {

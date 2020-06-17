@@ -1,6 +1,6 @@
 import {Component, OnDestroy, OnInit, ViewChild} from '@angular/core';
 import {DatabaseService} from '../../../service/database.service';
-import {FormBuilder, FormGroup, Validators} from '@angular/forms';
+import {FormBuilder, FormControl, FormGroup, Validators} from '@angular/forms';
 import {Observable, Subscription} from 'rxjs';
 import {MatSnackBar} from '@angular/material/snack-bar';
 import {MatStepper} from '@angular/material/stepper';
@@ -16,13 +16,27 @@ import {Router} from "@angular/router";
   templateUrl: './new-course.component.html',
   styleUrls: ['./new-course.component.scss']
 })
-export class NewCourseComponent implements OnInit, OnDestroy {
 
-  constructor(private db: DatabaseService, private _formBuilder: FormBuilder,
-              private snackBar: MatSnackBar, private titlebar: TitlebarService, private router: Router) {
+export class NewCourseComponent implements OnInit, OnDestroy {
+  // newCourseForm: FormGroup;
+
+  constructor(private db: DatabaseService,
+              private _formBuilder: FormBuilder,
+              private snackBar: MatSnackBar,
+              private titlebar: TitlebarService,
+              private router: Router) {
+    // this.newCourseForm = this._formBuilder.group({
+    //   newCourseName: ['', Validators.required],
+    //   newCourseDescription: ['',  Validators.required],
+    //   newCourseType: ['',  Validators.required],
+    //   newCourseSemester: [''],
+    //   newCourseModuleID: [''],
+    //   newCourseDate: [''],
+    //   newCoursePrivateUserData: ['',  Validators.required]
+    // })
   }
 
-  @ViewChild('stepper') stepper: MatStepper;
+  // @ViewChild('stepper') stepper: MatStepper;
 
   SEMESTER_PATTERN = '^((WS)[0-9]{2,2}\\/[0-9]{2,2})|^(SS[0-9]{2,2})';
   YEAR_PATTERN = '^(?:(?:31(\\/|-|\\.)(?:0?[13578]|1[02]))\\1|(?:(?:29|30)(\\/|-|\\.)(?:0?[13-9]|1[0-2])\\2))' +
@@ -32,24 +46,31 @@ export class NewCourseComponent implements OnInit, OnDestroy {
 
   subscription: Subscription = new Subscription();
 
-  courseNameFG: FormGroup;
+ /* courseNameFG: FormGroup;
   courseDescriptionFG: FormGroup;
   courseTaskTypeFG: FormGroup;
   courseSemesterFG: FormGroup;
   courseModuleIDFG: FormGroup;
-  courseEndFG: FormGroup;
+  courseEndFG: FormGroup;*/
 
   testTypes$: Observable<Testsystem[]>;
-  newCourseName: string;
-  newCourseDescription: string;
-  newCourseType: string;
-  newCourseSemester: string;
-  newCourseModuleID: string;
-  newCourseDate: string;
-  newCoursePrivatUserData: string;
+  newCourseName = new FormControl('', [Validators.required]);
+  newCourseDescription = new FormControl('', [Validators.required]);
+  newCourseType = new FormControl('', [Validators.required]);
+  newCourseSemester = new FormControl('', [Validators.pattern(this.SEMESTER_PATTERN)]);
+  newCourseModuleID = new FormControl('');
+  newCourseDate = new FormControl('', [Validators.pattern(this.YEAR_PATTERN)]);
+  newCoursePrivateUserData = new FormControl('', [Validators.required]);
 
   docent_list: User[];
   tutor_list: User[];
+
+  getErrorMessage() {
+    // if (this.newCourseSemester.hasError('nullValidator')) {
+    //   return 'You must enter a value';
+    // }
+    return this.newCourseSemester.hasError('pattern') ? 'Beispiel WS18/19' : '';
+  }
 
   ngOnInit() {
     this.docent_list = []
@@ -57,11 +78,13 @@ export class NewCourseComponent implements OnInit, OnDestroy {
 
     this.testTypes$ = this.db.getTestsystemTypes();
     this.titlebar.emitTitle('Neuen Kurs erstellen');
-    this.newCoursePrivatUserData = 'false';
+    this.newCoursePrivateUserData.setValue(false);
+
+
 
 
     // Check if step is done
-    this.courseNameFG = this._formBuilder.group({
+    /*this.courseNameFG = this._formBuilder.group({
       firstCtrl: ['', Validators.required]
     });
     this.courseDescriptionFG = this._formBuilder.group({
@@ -79,9 +102,9 @@ export class NewCourseComponent implements OnInit, OnDestroy {
     this.courseEndFG = this._formBuilder.group({
       sixthCtrl: ['', Validators.pattern(this.YEAR_PATTERN)]
     });
+*/
 
-
-    this.subscription.add(this.courseNameFG.valueChanges.subscribe(
+    /*this.subscription.add(this.courseNameFG.valueChanges.subscribe(
       (inputStep1: { firstCtrl: string }) => {
         if(inputStep1.firstCtrl){
           if (inputStep1.firstCtrl.match('^ $')) {
@@ -114,7 +137,7 @@ export class NewCourseComponent implements OnInit, OnDestroy {
       (inputStep6: { sixthCtrl: string }) => {
         this.newCourseDate = inputStep6.sixthCtrl;
       }
-    ));
+    ));*/
 
   }
 
@@ -126,7 +149,10 @@ export class NewCourseComponent implements OnInit, OnDestroy {
    * Get data from form groups and create new course
    */
   createCourse() {
-    if (!this.newCourseDescription) {
+
+    console.log(this.newCourseName + "\n" + this.newCourseDescription + "\n" + this.newCourseType
+      + "\n" + this.newCourseSemester.value  + "\n" + this.newCourseModuleID  + "\n" + this.newCourseDate);
+/*    if (!this.newCourseDescription) {
       this.newCourseDescription = '';
     }
 
@@ -140,16 +166,18 @@ export class NewCourseComponent implements OnInit, OnDestroy {
 
     if (!this.newCourseDate || !this.newCourseDate.match(this.YEAR_PATTERN)) {
       this.newCourseDate = '';
-    }
+    }*/
 
-    let privateUserData: boolean;
-    privateUserData = this.newCoursePrivatUserData === 'true';
+    //this.newCourseForm.value.newCourseDescription
+
+    /*let privateUserData: boolean;
+    privateUserData = this.newCoursePrivateUserData === 'true';
 
     this.db.createCourse(this.newCourseName, this.newCourseDescription, this.newCourseType, this.newCourseSemester,
       this.newCourseModuleID, this.newCourseDate, privateUserData).subscribe((data: NewCourse) => {
-      this.snackBar.open('Kurs ' + this.newCourseName + ' wurde erstellt', 'OK',
-        {duration: 5000});
-      this.stepper.reset();
+      // this.snackBar.open('Kurs ' + this.newCourseName + ' wurde erstellt', 'OK',
+      //   {duration: 5000});
+      // this.stepper.reset();
 
       let updateDocentTutorList = []
       this.tutor_list.forEach(u => {
@@ -164,6 +192,6 @@ export class NewCourseComponent implements OnInit, OnDestroy {
       Promise.all(updateDocentTutorList).then(() => {
         setTimeout( () => {this.router.navigate(['courses', data.course_id])},100)
       })
-    });
+    });*/
   }
 }
